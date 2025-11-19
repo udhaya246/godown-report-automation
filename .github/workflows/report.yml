@@ -26,4 +26,4 @@ jobs:
           TWILIO_AUTH_TOKEN: ${{ secrets.TWILIO_AUTH_TOKEN }}
           TWILIO_WHATSAPP_FROM: ${{ secrets.TWILIO_WHATSAPP_FROM }}
           CEO_WHATSAPP_TO: ${{ secrets.CEO_WHATSAPP_TO }}
-        run: node index.js
+        run: python main.py
