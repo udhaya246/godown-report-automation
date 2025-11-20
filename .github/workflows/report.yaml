@@ -13,26 +13,27 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v3
 
+      - name: Clear pip cache
+        run: rm -rf ~/.cache/pip
+
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
           python-version: 3.11
 
-      # Create virtual environment and install dependencies
-      - name: Set up virtual environment and install packages
+      - name: Upgrade pip
+        run: pip install --upgrade pip
+
+      - name: Install dependencies
         run: |
-          python -m venv venv
-          source venv/bin/activate
-          pip install --upgrade pip
           pip install --no-cache-dir \
-            "numpy>=1.24,<1.27" \
-            "pandas==2.1.0" \
             dropbox==12.0.0 \
+            pandas==2.1.0 \
+            numpy==1.25.2 \
             openpyxl==3.1.2 \
             twilio==8.10.0 \
             requests
 
-      # Run the automation script inside the virtual environment
       - name: Run automation script
         env:
           DROPBOX_TOKEN: ${{ secrets.DROPBOX_TOKEN }}
@@ -44,6 +45,4 @@ jobs:
           TWILIO_AUTH: ${{ secrets.TWILIO_AUTH }}
           WHATSAPP_FROM: ${{ secrets.WHATSAPP_FROM }}
           WHATSAPP_TO: ${{ secrets.WHATSAPP_TO }}
-        run: |
-          source venv/bin/activate
-          python script.py
+        run: python script.py
