@@ -23,6 +23,10 @@ jobs:
 
       - name: Upgrade pip
         run: pip install --upgrade pip
+        
+      - name: Install requests
+        run: pip install --no-cache-dir requests
+        
 
       - name: Install dependencies
         run: pip install --no-cache-dir -r requirements.txt
