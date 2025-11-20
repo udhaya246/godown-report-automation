@@ -2,28 +2,37 @@ name: Send Daily Material Report
 
 on:
   schedule:
-    - cron: '0 8 * * *' # Every day at 8 AM
+    - cron: '0 8 * * *'   # Every day at 8 AM IST (adjust if needed)
   workflow_dispatch:
 
 jobs:
   send-report:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v3
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v3
+      - name: Set up Python
+        uses: actions/setup-python@v4
         with:
-          node-version: '20'
+          python-version: '3.11'
 
-      - name: Install dependencies
-        run: npm install
+      - name: Install Python dependencies
+        run: |
+          pip install -r requirements.txt
 
       - name: Run automation script
         env:
-          TWILIO_ACCOUNT_SID: ${{ secrets.TWILIO_ACCOUNT_SID }}
-          TWILIO_AUTH_TOKEN: ${{ secrets.TWILIO_AUTH_TOKEN }}
-          TWILIO_WHATSAPP_FROM: ${{ secrets.TWILIO_WHATSAPP_FROM }}
-          CEO_WHATSAPP_TO: ${{ secrets.CEO_WHATSAPP_TO }}
-        run: python main.py
+          DROPBOX_TOKEN: ${{ secrets.DROPBOX_TOKEN }}
+          TWILIO_SID: ${{ secrets.TWILIO_ACCOUNT_SID }}
+          TWILIO_AUTH: ${{ secrets.TWILIO_AUTH_TOKEN }}
+          WHATSAPP_FROM: ${{ secrets.TWILIO_WHATSAPP_FROM }}
+          WHATSAPP_TO: ${{ secrets.CEO_WHATSAPP_TO }}
+
+          # These three MUST match your real Dropbox Business folder structure
+          INCOMING_ROOT: ${{ secrets.INCOMING_ROOT }}          # Example: /Udhayasri/godowns/incoming
+          PROCESSED_ROOT: ${{ secrets.PROCESSED_ROOT }}        # Example: /Udhayasri/godowns/processed
+          COMPILED_ROOT: ${{ secrets.COMPILED_ROOT }}          # Example: /Udhayasri/godowns/compiled_reports
+
+        run: python script.py
