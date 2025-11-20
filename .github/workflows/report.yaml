@@ -25,11 +25,12 @@ jobs:
       - name: Upgrade pip
         run: pip install --upgrade pip
 
+      
+      - name: Install compatible numpy
+        run: pip install --upgrade --force-reinstall "numpy>=1.24,<1.27"
+
       - name: Install dependencies
-        run: |
-          pip install --upgrade pip
-          pip install --no-cache-dir "numpy>=1.24,<1.27"
-          pip install --no-cache-dir -r requirements.txt
+        run: pip install --no-cache-dir -r requirements.txt
 
 
       - name: Run automation script
