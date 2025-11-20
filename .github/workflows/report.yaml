@@ -24,7 +24,13 @@ jobs:
           python -m venv venv
           source venv/bin/activate
           pip install --upgrade pip
-          pip install --no-cache-dir "numpy>=1.24,<1.27" "pandas==2.1.0" dropbox==12.0.0 openpyxl==3.1.2 twilio==8.10.0
+          pip install --no-cache-dir \
+            "numpy>=1.24,<1.27" \
+            "pandas==2.1.0" \
+            dropbox==12.0.0 \
+            openpyxl==3.1.2 \
+            twilio==8.10.0 \
+            requests
 
       # Run the automation script inside the virtual environment
       - name: Run automation script
