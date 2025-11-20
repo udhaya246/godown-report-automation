@@ -35,7 +35,7 @@ DROPBOX_TOKEN = os.getenv("DROPBOX_TOKEN")
 TWILIO_SID = os.getenv("TWILIO_SID")
 TWILIO_AUTH = os.getenv("TWILIO_AUTH")
 WHATSAPP_TO = os.getenv("WHATSAPP_TO")
-WHATSAPP_FROM = os.getenv("WHATSAPP_FROM", "whatsapp:+14155238886")
+WHATSAPP_FROM = os.getenv("WHATSAPP_FROM", "whatsapp:+14155238886)
 
 # Your folder paths (inside /Udhayasri — do NOT include /Udhayasri here)
 INCOMING_ROOT = "/godowns/incoming"
