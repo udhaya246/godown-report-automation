@@ -1,18 +1,21 @@
 #!/usr/bin/env python3
 """
-Dropbox -> compile next-day loading rows -> Twilio WhatsApp text message
-Folder layout expected:
- /godowns/incoming/godown1/*.xlsx
- /godowns/incoming/godown2/*.xlsx
- /godowns/processed/
- /godowns/compiled_reports/
+Automated Daily Loading Report
+Dropbox → Compile next-day rows → Twilio WhatsApp
 
-Environment variables (set as GitHub secrets):
+Expected Dropbox folder structure (inside your personal folder `/Udhayasri`):
+
+  /godowns/incoming/godown1/*.xlsx
+  /godowns/incoming/godown2/*.xlsx
+  /godowns/processed/<godown>/
+  /godowns/reports/
+
+Environment variables (GitHub Secrets):
 DROPBOX_TOKEN
 TWILIO_SID
 TWILIO_AUTH
-WHATSAPP_TO    (e.g. whatsapp:+91XXXXXXXXXX)
-MAX_ROWS (optional, default 200)
+WHATSAPP_FROM
+WHATSAPP_TO
 """
 
 import os
@@ -25,227 +28,221 @@ from dropbox import Dropbox
 from dropbox.files import WriteMode
 from twilio.rest import Client
 
-# ------- Config from env -------
+# ---------------------------------------------------------
+# Load ENV variables
+# ---------------------------------------------------------
 DROPBOX_TOKEN = os.getenv("DROPBOX_TOKEN")
 TWILIO_SID = os.getenv("TWILIO_SID")
 TWILIO_AUTH = os.getenv("TWILIO_AUTH")
-WHATSAPP_TO = os.getenv("WHATSAPP_TO")            # include 'whatsapp:+91...'
-WHATSAPP_FROM = os.getenv("WHATSAPP_FROM", "whatsapp:+14155238886")  # Twilio Sandbox default
-INCOMING_ROOT = os.getenv("INCOMING_ROOT", "/godowns/incoming")
-PROCESSED_ROOT = os.getenv("PROCESSED_ROOT", "/godowns/processed")
-COMPILED_ROOT = os.getenv("COMPILED_ROOT", "/godowns/compiled_reports")
-MAX_ROWS = int(os.getenv("MAX_ROWS", "200"))
+WHATSAPP_TO = os.getenv("WHATSAPP_TO")
+WHATSAPP_FROM = os.getenv("WHATSAPP_FROM", "whatsapp:+14155238886")
 
-# minimal validation
-missing = [n for n, v in [
+# Your folder paths (inside /Udhayasri — do NOT include /Udhayasri here)
+INCOMING_ROOT = "/godowns/incoming"
+PROCESSED_ROOT = "/godowns/processed"
+REPORTS_ROOT = "/godowns/reports"
+
+MAX_ROWS = 200
+
+required = [
     ("DROPBOX_TOKEN", DROPBOX_TOKEN),
     ("TWILIO_SID", TWILIO_SID),
     ("TWILIO_AUTH", TWILIO_AUTH),
     ("WHATSAPP_TO", WHATSAPP_TO),
-] if not v]
-if missing:
-    print("Missing required env vars: " + ", ".join(missing), file=sys.stderr)
-    sys.exit(2)
+]
 
-# logging
-logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+miss = [k for k, v in required if not v]
+if miss:
+    print(f"Missing environment variables: {', '.join(miss)}")
+    sys.exit(1)
+
+logging.basicConfig(level=logging.INFO, format="%(asctime)s [INFO] %(message)s")
 
 dbx = Dropbox(DROPBOX_TOKEN)
-tw = Client(TWILIO_SID, TWILIO_AUTH)
+twilio = Client(TWILIO_SID, TWILIO_AUTH)
+
+# ---------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------
+def ensure_folder(path):
+    """Create folder if not exists."""
+    try:
+        dbx.files_get_metadata(path)
+    except:
+        try:
+            dbx.files_create_folder_v2(path)
+            logging.info(f"Created folder: {path}")
+        except:
+            pass
 
 def list_godown_folders(root):
-    """Return list of subfolder names under incoming root (godown1, godown2...)"""
     try:
         res = dbx.files_list_folder(root)
     except Exception as e:
-        logging.error("Failed to list incoming root %s: %s", root, e)
+        logging.error(f"Failed to list folder {root}: {e}")
         return []
-    names = []
-    for entry in res.entries:
-        if entry.is_folder:
-            names.append(entry.name)
-    # also handle pagination
-    while res.has_more:
-        res = dbx.files_list_folder_continue(res.cursor)
-        for entry in res.entries:
-            if entry.is_folder:
-                names.append(entry.name)
+    names = [e.name for e in res.entries if hasattr(e, "name")]
     return names
 
-def list_files_in_folder(folder_path):
-    """Return file metadata entries for Excel files in a folder path"""
+def list_files(path):
     try:
-        res = dbx.files_list_folder(folder_path)
-    except Exception as e:
-        logging.error("Cannot list folder %s: %s", folder_path, e)
+        res = dbx.files_list_folder(path)
+        entries = res.entries
+        return [f for f in entries if f.name.lower().endswith((".xlsx", ".xls", ".csv"))]
+    except:
         return []
-    files = [e for e in res.entries if hasattr(e, "name") and e.name.lower().endswith((".xlsx", ".xls", ".csv"))]
-    while res.has_more:
-        res = dbx.files_list_folder_continue(res.cursor)
-        for e in res.entries:
-            if hasattr(e, "name") and e.name.lower().endswith((".xlsx", ".xls", ".csv")):
-                files.append(e)
-    return files
 
-def download_bytes(path):
+def download(path):
     try:
-        md, res = dbx.files_download(path)
-        return res.content, md.name
+        meta, resp = dbx.files_download(path)
+        return resp.content, meta.name
     except Exception as e:
-        logging.error("Download failed for %s: %s", path, e)
+        logging.error(f"Download failed {path}: {e}")
         return None, None
 
-def df_from_bytes(content_bytes, filename):
-    bio = io.BytesIO(content_bytes)
-    name = filename.lower()
+def df_from_bytes(raw, fname):
+    bio = io.BytesIO(raw)
     try:
-        if name.endswith(".csv"):
-            # try decode utf-8, fallback to latin1
-            txt = bio.getvalue().decode("utf-8", errors="replace")
-            return pd.read_csv(io.StringIO(txt))
-        else:
-            # xls/xlsx
-            return pd.read_excel(bio, engine="openpyxl")
+        if fname.endswith(".csv"):
+            return pd.read_csv(io.StringIO(raw.decode("utf-8", "ignore")))
+        return pd.read_excel(bio)
     except Exception as e:
-        logging.error("Failed to read %s: %s", filename, e)
+        logging.error(f"Failed reading {fname}: {e}")
         return None
 
-def normalize_df(df):
-    # strip column names
+def normalize(df):
     df.columns = [str(c).strip() for c in df.columns]
     return df
 
-def collect_tomorrow_rows(df):
-    # look for any date-like column
+def filter_tomorrow(df):
     tomorrow = (datetime.utcnow() + timedelta(days=1)).date()
-    # try common names
     date_cols = [c for c in df.columns if "date" in c.lower()]
+
     if not date_cols:
-        # if no date column, assume all rows are for next day (or user wants that)
         return df.copy()
-    for c in date_cols:
+
+    for col in date_cols:
         try:
-            parsed = pd.to_datetime(df[c], errors="coerce").dt.date
+            parsed = pd.to_datetime(df[col], errors="ignore").dt.date
             mask = parsed == tomorrow
             if mask.any():
                 return df[mask].copy()
-        except Exception:
-            continue
-    # none matched
+        except:
+            pass
     return pd.DataFrame(columns=df.columns)
 
-def format_report(compiled_rows_by_godown):
-    """compiled_rows_by_godown: dict {godown_name: DataFrame}"""
+def move_to_processed(src, godown):
+    dest_folder = f"{PROCESSED_ROOT}/{godown}"
+    ensure_folder(dest_folder)
+    dest_path = f"{dest_folder}/{os.path.basename(src)}"
+    try:
+        dbx.files_move_v2(src, dest_path, autorename=True)
+        logging.info(f"Moved → {dest_path}")
+    except Exception as e:
+        logging.error(f"Move failed {src}: {e}")
+
+def upload_report(text):
+    ensure_folder(REPORTS_ROOT)
+    fname = f"report_{(datetime.utcnow()+timedelta(days=1)).date()}.txt"
+    path = f"{REPORTS_ROOT}/{fname}"
+    try:
+        dbx.files_upload(text.encode(), path, mode=WriteMode.overwrite)
+        logging.info(f"Uploaded report → {path}")
+    except Exception as e:
+        logging.error(f"Upload failed: {e}")
+
+def send_whatsapp(text):
+    try:
+        twilio.messages.create(from_=WHATSAPP_FROM, to=WHATSAPP_TO, body=text)
+        logging.info("WhatsApp message sent")
+    except Exception as e:
+        logging.error(f"Twilio failed: {e}")
+
+# ---------------------------------------------------------
+# Report builder
+# ---------------------------------------------------------
+def build_report(compiled):
     lines = []
-    lines.append("NEXT DAY LOADING SUMMARY")
-    lines.append(f"Date: {(datetime.utcnow() + timedelta(days=1)).date().isoformat()}")
-    lines.append("-"*40)
-    total_items = 0
-    for godown, df in compiled_rows_by_godown.items():
+    lines.append("NEXT-DAY LOADING REPORT")
+    lines.append(f"Date: {(datetime.utcnow() + timedelta(days=1)).date()}")
+    lines.append("-" * 40)
+
+    total = 0
+
+    for godown, df in compiled.items():
         lines.append(f"\nGODOWN: {godown.upper()}")
         if df.empty:
             lines.append("  No items")
             continue
-        # pick columns to display, prefer these names if present
-        prefer = ["PARTY","MATERIAL","APROX QTY","QTY","QUANTITY","VEHICLE NO","VEHICLE","RATE / KG","RATE","STATUS"]
-        present = list(df.columns)
-        cols = []
-        for p in prefer:
-            for col in present:
-                if col.strip().upper() == p:
-                    cols.append(col)
-        # add others if needed
-        for c in present:
-            if c not in cols:
-                cols.append(c)
-        # produce lines
-        for idx, row in df.head(MAX_ROWS).iterrows():
-            total_items += 1
-            # build compact line using available columns
-            party = str(row.get("PARTY","")).strip()
-            material = str(row.get("MATERIAL","")).strip()
-            qty = str(row.get("APROX QTY", row.get("QTY", row.get("QUANTITY","")))).strip()
-            vehicle = str(row.get("VEHICLE NO", row.get("VEHICLE",""))).strip()
-            line = f"• {party} — {material} — {qty}"
-            if vehicle:
-                line += f" — {vehicle}"
+
+        for _, row in df.head(MAX_ROWS).iterrows():
+            p = str(row.get("PARTY", "")).strip()
+            m = str(row.get("MATERIAL", "")).strip()
+            q = str(row.get("QTY", row.get("QUANTITY", ""))).strip()
+            v = str(row.get("VEHICLE NO", row.get("VEHICLE", ""))).strip()
+
+            line = f"• {p} — {m} — {q}"
+            if v:
+                line += f" — {v}"
             lines.append(line)
+            total += 1
+
     lines.append("\n" + "-"*40)
-    lines.append(f"Total items listed: {total_items}")
+    lines.append(f"Total Items: {total}")
+
     return "\n".join(lines)
 
-def move_processed(src_path, godown):
-    # move to PROCESSED_ROOT/<godown>/
-    name = os.path.basename(src_path)
-    dest = f"{PROCESSED_ROOT.rstrip('/')}/{godown}/{name}"
-    try:
-        # create target folder implicitly by moving (Dropbox autogenerates)
-        dbx.files_move_v2(src_path, dest, autorename=True)
-        logging.info("Moved %s -> %s", src_path, dest)
-    except Exception as e:
-        logging.error("Failed to move %s to %s: %s", src_path, dest, e)
-
-def upload_compiled_text(text):
-    fname = f"report_{(datetime.utcnow()+timedelta(days=1)).date().isoformat()}.txt"
-    path = f"{COMPILED_ROOT.rstrip('/')}/{fname}"
-    try:
-        dbx.files_upload(text.encode("utf-8"), path, mode=WriteMode.overwrite)
-        logging.info("Uploaded compiled report to %s", path)
-    except Exception as e:
-        logging.error("Failed to upload compiled report: %s", e)
-
-def send_whatsapp_text(body):
-    try:
-        tw.messages.create(
-            from_=WHATSAPP_FROM,
-            to=WHATSAPP_TO,
-            body=body
-        )
-        logging.info("WhatsApp sent to %s", WHATSAPP_TO)
-    except Exception as e:
-        logging.error("Twilio send failed: %s", e)
-
+# ---------------------------------------------------------
+# MAIN
+# ---------------------------------------------------------
 def main():
-    logging.info("Start processing")
+    logging.info("=== START ===")
+
+    ensure_folder(PROCESSED_ROOT)
+    ensure_folder(REPORTS_ROOT)
+
     godowns = list_godown_folders(INCOMING_ROOT)
-    if not godowns:
-        logging.warning("No godown folders found under %s", INCOMING_ROOT)
-        # optionally send a message that no files found
-        # send_whatsapp_text("No godown files found today.")
-        return
     compiled = {}
-    any_row = False
+    any_rows = False
+
     for gd in godowns:
-        folder = f"{INCOMING_ROOT.rstrip('/')}/{gd}"
-        files = list_files_in_folder(folder)
-        logging.info("Found %d files in %s", len(files), folder)
+        folder = f"{INCOMING_ROOT}/{gd}"
+        files = list_files(folder)
+
         all_rows = pd.DataFrame()
+
         for f in files:
-            path = f.path_lower if hasattr(f, "path_lower") else f.path_display
-            content, name = download_bytes(path)
-            if content is None:
+            path = f.path_lower
+            raw, fname = download(path)
+            if not raw:
+                move_to_processed(path, gd)
                 continue
-            df = df_from_bytes(content, name)
+
+            df = df_from_bytes(raw, fname)
             if df is None:
-                move_processed(path, gd)  # move problematic file to processed to avoid repeat
+                move_to_processed(path, gd)
                 continue
-            df = normalize_df(df)
-            rows = collect_tomorrow_rows(df)
+
+            df = normalize(df)
+            rows = filter_tomorrow(df)
+
             if not rows.empty:
-                any_row = True
-                all_rows = pd.concat([all_rows, rows], ignore_index=True, sort=False)
-            # move original to processed
-            move_processed(path, gd)
+                any_rows = True
+                all_rows = pd.concat([all_rows, rows], ignore_index=True)
+
+            move_to_processed(path, gd)
+
         compiled[gd] = all_rows
-    # build report
-    report_text = format_report(compiled)
-    upload_compiled_text(report_text)
-    if any_row:
-        send_whatsapp_text(report_text)
+
+    report = build_report(compiled)
+    upload_report(report)
+
+    if any_rows:
+        send_whatsapp(report)
     else:
-        # optional: still send a short "no items" message
-        send_whatsapp_text("No items scheduled for loading tomorrow.")
-    logging.info("Run complete.")
+        send_whatsapp("No items scheduled for tomorrow.")
+
+    logging.info("=== COMPLETE ===")
 
 if __name__ == "__main__":
     main()
