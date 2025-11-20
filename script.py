@@ -3,7 +3,7 @@
 Automated Daily Loading Report
 Dropbox → Compile next-day rows → Twilio WhatsApp
 
-Expected Dropbox folder structure (inside your personal folder `/Udhayasri`):
+Expected Dropbox folder structure:
 
   /godowns/incoming/godown1/*.xlsx
   /godowns/incoming/godown2/*.xlsx
@@ -29,7 +29,7 @@ from dropbox.files import WriteMode
 from twilio.rest import Client
 
 # ---------------------------------------------------------
-# Load ENV variables
+# Load environment variables
 # ---------------------------------------------------------
 DROPBOX_TOKEN = os.getenv("DROPBOX_TOKEN")
 TWILIO_SID = os.getenv("TWILIO_SID")
@@ -37,7 +37,6 @@ TWILIO_AUTH = os.getenv("TWILIO_AUTH")
 WHATSAPP_TO = os.getenv("WHATSAPP_TO")
 WHATSAPP_FROM = os.getenv("WHATSAPP_FROM", "whatsapp:+14155238886")
 
-# Your folder paths (inside /Udhayasri — do NOT include /Udhayasri here)
 INCOMING_ROOT = "/godowns/incoming"
 PROCESSED_ROOT = "/godowns/processed"
 REPORTS_ROOT = "/godowns/reports"
@@ -51,9 +50,9 @@ required = [
     ("WHATSAPP_TO", WHATSAPP_TO),
 ]
 
-miss = [k for k, v in required if not v]
-if miss:
-    print(f"Missing environment variables: {', '.join(miss)}")
+missing = [k for k, v in required if not v]
+if missing:
+    print(f"Missing environment variables: {', '.join(missing)}")
     sys.exit(1)
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [INFO] %(message)s")
@@ -62,10 +61,9 @@ dbx = Dropbox(DROPBOX_TOKEN)
 twilio = Client(TWILIO_SID, TWILIO_AUTH)
 
 # ---------------------------------------------------------
-# Helpers
+# Helper functions
 # ---------------------------------------------------------
 def ensure_folder(path):
-    """Create folder if not exists."""
     try:
         dbx.files_get_metadata(path)
     except:
@@ -78,17 +76,15 @@ def ensure_folder(path):
 def list_godown_folders(root):
     try:
         res = dbx.files_list_folder(root)
+        return [e.name for e in res.entries if hasattr(e, "name")]
     except Exception as e:
         logging.error(f"Failed to list folder {root}: {e}")
         return []
-    names = [e.name for e in res.entries if hasattr(e, "name")]
-    return names
 
 def list_files(path):
     try:
         res = dbx.files_list_folder(path)
-        entries = res.entries
-        return [f for f in entries if f.name.lower().endswith((".xlsx", ".xls", ".csv"))]
+        return [f for f in res.entries if f.name.lower().endswith((".xlsx", ".xls", ".csv"))]
     except:
         return []
 
@@ -117,10 +113,8 @@ def normalize(df):
 def filter_tomorrow(df):
     tomorrow = (datetime.utcnow() + timedelta(days=1)).date()
     date_cols = [c for c in df.columns if "date" in c.lower()]
-
     if not date_cols:
         return df.copy()
-
     for col in date_cols:
         try:
             parsed = pd.to_datetime(df[col], errors="ignore").dt.date
@@ -174,13 +168,11 @@ def build_report(compiled):
         if df.empty:
             lines.append("  No items")
             continue
-
         for _, row in df.head(MAX_ROWS).iterrows():
             p = str(row.get("PARTY", "")).strip()
             m = str(row.get("MATERIAL", "")).strip()
             q = str(row.get("QTY", row.get("QUANTITY", ""))).strip()
             v = str(row.get("VEHICLE NO", row.get("VEHICLE", ""))).strip()
-
             line = f"• {p} — {m} — {q}"
             if v:
                 line += f" — {v}"
@@ -197,7 +189,6 @@ def build_report(compiled):
 # ---------------------------------------------------------
 def main():
     logging.info("=== START ===")
-
     ensure_folder(PROCESSED_ROOT)
     ensure_folder(REPORTS_ROOT)
 
@@ -208,7 +199,6 @@ def main():
     for gd in godowns:
         folder = f"{INCOMING_ROOT}/{gd}"
         files = list_files(folder)
-
         all_rows = pd.DataFrame()
 
         for f in files:
@@ -217,19 +207,15 @@ def main():
             if not raw:
                 move_to_processed(path, gd)
                 continue
-
             df = df_from_bytes(raw, fname)
             if df is None:
                 move_to_processed(path, gd)
                 continue
-
             df = normalize(df)
             rows = filter_tomorrow(df)
-
             if not rows.empty:
                 any_rows = True
                 all_rows = pd.concat([all_rows, rows], ignore_index=True)
-
             move_to_processed(path, gd)
 
         compiled[gd] = all_rows
