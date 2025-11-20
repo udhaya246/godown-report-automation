@@ -26,13 +26,8 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install --no-cache-dir \
-            dropbox==12.0.0 \
-            pandas==2.1.0 \
-            numpy==1.25.2 \
-            openpyxl==3.1.2 \
-            twilio==8.10.0 \
-            requests
+          pip install --no-cache-dir requests
+          pip install --no-cache-dir dropbox==12.0.0 pandas==2.1.0 numpy==1.25.2 openpyxl==3.1.2 twilio==8.10.0
 
       - name: Run automation script
         env:
