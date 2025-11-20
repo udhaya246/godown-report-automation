@@ -45,29 +45,3 @@ jobs:
           WHATSAPP_TO: ${{ secrets.WHATSAPP_TO }}
         run: |
           python - <<EOF
-import os
-from twilio.rest import Client
-
-# Twilio credentials
-sid = os.environ['TWILIO_SID']
-auth_token = os.environ['TWILIO_AUTH']
-from_whatsapp = os.environ['WHATSAPP_FROM']
-to_whatsapp = os.environ['WHATSAPP_TO']
-
-client = Client(sid, auth_token)
-
-# Path to your generated report (adjust filename if needed)
-report_file = "daily_report.txt"
-
-with open(report_file, "r") as f:
-    report_content = f.read()
-
-# Send WhatsApp message
-message = client.messages.create(
-    body=report_content,
-    from_=f"whatsapp:{from_whatsapp}",
-    to=f"whatsapp:{to_whatsapp}"
-)
-
-print(f"WhatsApp report sent. Message SID: {message.sid}")
-EOF
