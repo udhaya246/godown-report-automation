@@ -2,7 +2,7 @@ name: Send Daily Material Report
 
 on:
   schedule:
-    - cron: '0 8 * * *'
+    - cron: '0 8 * * *'  # Every day at 8 AM
   workflow_dispatch:
 
 jobs:
@@ -11,15 +11,22 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v3
+
+      # Optional: Clear pip cache to avoid old Twilio version
+      - name: Clear pip cache
+        run: rm -rf ~/.cache/pip
 
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
-          python-version: '3.11'
+          python-version: 3.11
 
-      - name: Install Python dependencies
-        run: pip install -r requirements.txt
+      - name: Upgrade pip
+        run: pip install --upgrade pip
+
+      - name: Install dependencies
+        run: pip install --no-cache-dir -r requirements.txt
 
       - name: Run automation script
         env:
@@ -28,9 +35,39 @@ jobs:
           PROCESSED_ROOT: ${{ secrets.PROCESSED_ROOT }}
           COMPILED_ROOT: ${{ secrets.COMPILED_ROOT }}
 
+        run: python script.py
+
+      - name: Send report via WhatsApp
+        env:
           TWILIO_SID: ${{ secrets.TWILIO_SID }}
           TWILIO_AUTH: ${{ secrets.TWILIO_AUTH }}
           WHATSAPP_FROM: ${{ secrets.WHATSAPP_FROM }}
           WHATSAPP_TO: ${{ secrets.WHATSAPP_TO }}
+        run: |
+          python - <<EOF
+import os
+from twilio.rest import Client
 
-        run: python script.py
+# Twilio credentials
+sid = os.environ['TWILIO_SID']
+auth_token = os.environ['TWILIO_AUTH']
+from_whatsapp = os.environ['WHATSAPP_FROM']
+to_whatsapp = os.environ['WHATSAPP_TO']
+
+client = Client(sid, auth_token)
+
+# Path to your generated report (adjust filename if needed)
+report_file = "daily_report.txt"
+
+with open(report_file, "r") as f:
+    report_content = f.read()
+
+# Send WhatsApp message
+message = client.messages.create(
+    body=report_content,
+    from_=f"whatsapp:{from_whatsapp}",
+    to=f"whatsapp:{to_whatsapp}"
+)
+
+print(f"WhatsApp report sent. Message SID: {message.sid}")
+EOF
