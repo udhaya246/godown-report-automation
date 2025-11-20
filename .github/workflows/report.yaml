@@ -1,8 +1,9 @@
+
 name: Send Daily Material Report
 
 on:
   schedule:
-    - cron: '0 8 * * *'  # Every day at 8 AM
+    - cron: '0 8 * * *'
   workflow_dispatch:
 
 jobs:
@@ -21,24 +22,22 @@ jobs:
       - name: Upgrade pip
         run: pip install --upgrade pip
 
-      # ------------------------------------------------------
-      # Fix numpy/pandas binary incompatibility
-      # ------------------------------------------------------
-      - name: Fix numpy/pandas
+      # Uninstall any pre-installed numpy/pandas first
+      - name: Uninstall conflicting packages
         run: |
           pip uninstall -y numpy pandas
+
+      # Install fixed versions in correct order
+      - name: Install numpy and pandas
+        run: |
           pip install --no-cache-dir "numpy>=1.24,<1.27"
           pip install --no-cache-dir "pandas==2.1.0"
 
-      # ------------------------------------------------------
-      # Install other dependencies (excluding numpy/pandas)
-      # ------------------------------------------------------
+      # Install other dependencies (without numpy/pandas)
       - name: Install other dependencies
         run: pip install --no-cache-dir -r requirements.txt --no-deps
 
-      # ------------------------------------------------------
-      # Run automation script
-      # ------------------------------------------------------
+      # Run the script
       - name: Run automation script
         env:
           DROPBOX_TOKEN: ${{ secrets.DROPBOX_TOKEN }}
