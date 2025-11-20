@@ -13,10 +13,6 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v3
 
-      # Optional: Clear pip cache to avoid old Twilio version
-      - name: Clear pip cache
-        run: rm -rf ~/.cache/pip
-
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
@@ -25,14 +21,24 @@ jobs:
       - name: Upgrade pip
         run: pip install --upgrade pip
 
-      
-      - name: Install compatible numpy
-        run: pip install --upgrade --force-reinstall "numpy>=1.24,<1.27"
+      # ------------------------------------------------------
+      # Fix numpy/pandas binary incompatibility
+      # ------------------------------------------------------
+      - name: Fix numpy/pandas
+        run: |
+          pip uninstall -y numpy pandas
+          pip install --no-cache-dir "numpy>=1.24,<1.27"
+          pip install --no-cache-dir "pandas==2.1.0"
 
-      - name: Install dependencies
-        run: pip install --no-cache-dir -r requirements.txt
+      # ------------------------------------------------------
+      # Install other dependencies (excluding numpy/pandas)
+      # ------------------------------------------------------
+      - name: Install other dependencies
+        run: pip install --no-cache-dir -r requirements.txt --no-deps
 
-
+      # ------------------------------------------------------
+      # Run automation script
+      # ------------------------------------------------------
       - name: Run automation script
         env:
           DROPBOX_TOKEN: ${{ secrets.DROPBOX_TOKEN }}
@@ -40,13 +46,8 @@ jobs:
           PROCESSED_ROOT: ${{ secrets.PROCESSED_ROOT }}
           COMPILED_ROOT: ${{ secrets.COMPILED_ROOT }}
 
-        run: python script.py
-
-      - name: Send report via WhatsApp
-        env:
           TWILIO_SID: ${{ secrets.TWILIO_SID }}
           TWILIO_AUTH: ${{ secrets.TWILIO_AUTH }}
           WHATSAPP_FROM: ${{ secrets.WHATSAPP_FROM }}
           WHATSAPP_TO: ${{ secrets.WHATSAPP_TO }}
-        run: |
-          python - <<EOF
+        run: python script.py
