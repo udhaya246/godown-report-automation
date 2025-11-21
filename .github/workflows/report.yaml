@@ -23,6 +23,9 @@ jobs:
 
       - name: Upgrade pip
         run: pip install --upgrade pip
+
+      - name: Install Python dependencies
+        run: | pip install dropbox requests
         
       - name: Install requests
         run: pip install --no-cache-dir requests
