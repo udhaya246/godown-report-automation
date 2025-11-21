@@ -25,7 +25,8 @@ jobs:
         run: pip install --upgrade pip
 
       - name: Install Python dependencies
-        run: | pip install dropbox requests
+        run:  |  
+         pip install dropbox requests
         
       - name: Install requests
         run: pip install --no-cache-dir requests
@@ -44,5 +45,5 @@ jobs:
           TWILIO_SID: ${{ secrets.TWILIO_SID }}
           TWILIO_AUTH: ${{ secrets.TWILIO_AUTH }}
           WHATSAPP_FROM: ${{ secrets.WHATSAPP_FROM }}
-          WHATSAPP_TO: ${{ secrets.WHATSAPP_TO }}
+          CEO_WHATSAPP_TO: ${{ secrets.CEO_WHATSAPP_TO }}
         run: python script.py
