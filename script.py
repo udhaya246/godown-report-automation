@@ -35,9 +35,10 @@ DROPBOX_TOKEN = os.getenv("DROPBOX_TOKEN")
 TWILIO_SID = os.getenv("TWILIO_SID")
 TWILIO_AUTH = os.getenv("TWILIO_AUTH")
 
-# FIXED → use your actual GitHub secret name
-WHATSAPP_TO = os.getenv("CEO_WHATSAPP_TO")
+# CORRECT secret → matches exactly the GitHub secret you created
+WHATSAPP_TO = os.getenv("WHATSAPP_TO")
 
+# Default Twilio sandbox from number available if not set
 WHATSAPP_FROM = os.getenv("WHATSAPP_FROM", "whatsapp:+14155238886")
 
 INCOMING_ROOT = "/godowns/incoming"
@@ -116,8 +117,10 @@ def normalize(df):
 def filter_tomorrow(df):
     tomorrow = (datetime.utcnow() + timedelta(days=1)).date()
     date_cols = [c for c in df.columns if "date" in c.lower()]
+
     if not date_cols:
         return df.copy()
+
     for col in date_cols:
         try:
             parsed = pd.to_datetime(df[col], errors="ignore").dt.date
@@ -126,6 +129,7 @@ def filter_tomorrow(df):
                 return df[mask].copy()
         except:
             pass
+
     return pd.DataFrame(columns=df.columns)
 
 def move_to_processed(src, godown):
@@ -150,7 +154,11 @@ def upload_report(text):
 
 def send_whatsapp(text):
     try:
-        twilio.messages.create(from_=WHATSAPP_FROM, to=WHATSAPP_TO, body=text)
+        twilio.messages.create(
+            from_=WHATSAPP_FROM,
+            to=WHATSAPP_TO,
+            body=text
+        )
         logging.info("WhatsApp message sent")
     except Exception as e:
         logging.error(f"Twilio failed: {e}")
@@ -171,18 +179,21 @@ def build_report(compiled):
         if df.empty:
             lines.append("  No items")
             continue
+
         for _, row in df.head(MAX_ROWS).iterrows():
             p = str(row.get("PARTY", "")).strip()
             m = str(row.get("MATERIAL", "")).strip()
             q = str(row.get("QTY", row.get("QUANTITY", ""))).strip()
             v = str(row.get("VEHICLE NO", row.get("VEHICLE", ""))).strip()
+
             line = f"• {p} — {m} — {q}"
             if v:
                 line += f" — {v}"
+
             lines.append(line)
             total += 1
 
-    lines.append("\n" + "-"*40)
+    lines.append("\n" + "-" * 40)
     lines.append(f"Total Items: {total}")
 
     return "\n".join(lines)
@@ -192,6 +203,7 @@ def build_report(compiled):
 # ---------------------------------------------------------
 def main():
     logging.info("=== START ===")
+
     ensure_folder(PROCESSED_ROOT)
     ensure_folder(REPORTS_ROOT)
 
@@ -207,18 +219,23 @@ def main():
         for f in files:
             path = f.path_lower
             raw, fname = download(path)
+
             if not raw:
                 move_to_processed(path, gd)
                 continue
+
             df = df_from_bytes(raw, fname)
             if df is None:
                 move_to_processed(path, gd)
                 continue
+
             df = normalize(df)
             rows = filter_tomorrow(df)
+
             if not rows.empty:
                 any_rows = True
                 all_rows = pd.concat([all_rows, rows], ignore_index=True)
+
             move_to_processed(path, gd)
 
         compiled[gd] = all_rows
