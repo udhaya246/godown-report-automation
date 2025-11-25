@@ -27,10 +27,16 @@ jobs:
       - name: Run automation script
         env:
           DROPBOX_TOKEN: ${{ secrets.DROPBOX_TOKEN }}
+          INCOMING_ROOT: ${{ secrets.INCOMING_ROOT }}
+          PROCESSED_ROOT: ${{ secrets.PROCESSED_ROOT }}
+          COMPILED_ROOT: ${{ secrets.COMPILED_ROOT }}
+          DROPBOX_FOLDER_PATH: ${{ secrets.DROPBOX_FOLDER_PATH }}
 
           TWILIO_SID: ${{ secrets.TWILIO_SID }}
           TWILIO_AUTH: ${{ secrets.TWILIO_AUTH }}
           WHATSAPP_FROM: ${{ secrets.WHATSAPP_FROM }}
-          WHATSAPP_TO: ${{ secrets.CEO_WHATSAPP_TO }}
+
+          WHATSAPP_TO: ${{ secrets.WHATSAPP_TO }}        # ← your script checks this
+          CEO_WHATSAPP_TO: ${{ secrets.CEO_WHATSAPP_TO }} # ← you also need this
 
         run: python script.py
