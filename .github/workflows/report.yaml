@@ -31,6 +31,6 @@ jobs:
           TWILIO_SID: ${{ secrets.TWILIO_SID }}
           TWILIO_AUTH: ${{ secrets.TWILIO_AUTH }}
           WHATSAPP_FROM: ${{ secrets.WHATSAPP_FROM }}
-          CEO_WHATSAPP_TO: ${{ secrets.CEO_WHATSAPP_TO }}
+          WHATSAPP_TO: ${{ secrets.CEO_WHATSAPP_TO }}
 
         run: python script.py
