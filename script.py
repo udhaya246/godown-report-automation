@@ -34,7 +34,10 @@ from twilio.rest import Client
 DROPBOX_TOKEN = os.getenv("DROPBOX_TOKEN")
 TWILIO_SID = os.getenv("TWILIO_SID")
 TWILIO_AUTH = os.getenv("TWILIO_AUTH")
-WHATSAPP_TO = os.getenv("WHATSAPP_TO")
+
+# FIXED → use your actual GitHub secret name
+WHATSAPP_TO = os.getenv("CEO_WHATSAPP_TO")
+
 WHATSAPP_FROM = os.getenv("WHATSAPP_FROM", "whatsapp:+14155238886")
 
 INCOMING_ROOT = "/godowns/incoming"
