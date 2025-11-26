@@ -41,9 +41,11 @@ WHATSAPP_TO = os.getenv("WHATSAPP_TO")
 # Default Twilio sandbox from number available if not set
 WHATSAPP_FROM = os.getenv("WHATSAPP_FROM", "whatsapp:+14155238886")
 
-INCOMING_ROOT = "/godowns/incoming"
-PROCESSED_ROOT = "/godowns/processed"
-REPORTS_ROOT = "/godowns/reports"
+# Dropbox folder roots
+INCOMING_ROOT = os.getenv("INCOMING_ROOT", "/godowns/incoming")
+PROCESSED_ROOT = os.getenv("PROCESSED_ROOT", "/godowns/processed")
+REPORTS_ROOT = os.getenv("REPORTS_ROOT", "/godowns/reports")
+
 
 MAX_ROWS = 200
 
