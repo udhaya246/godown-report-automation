@@ -113,7 +113,7 @@ def normalize(df):
     return df
 
 def filter_tomorrow(df):
-    """Return rows scheduled for tomorrow (IST timezone)"""
+    """Return rows scheduled for tomorrow in IST timezone"""
     tomorrow = (datetime.now(IST) + timedelta(days=1)).date()
     date_cols = [c for c in df.columns if "date" in c.lower()]
 
@@ -122,15 +122,16 @@ def filter_tomorrow(df):
 
     for col in date_cols:
         try:
-            parsed = pd.to_datetime(df[col], errors="coerce").dt.date
-            mask = parsed == tomorrow
+            # Convert to datetime, then to IST, then take only date
+            parsed = pd.to_datetime(df[col], errors="coerce")
+            parsed = parsed.dt.tz_localize(None)  # remove tz info if any
+            mask = parsed.dt.date == tomorrow
             if mask.any():
                 return df[mask].copy()
         except Exception as e:
             logging.error(f"Error parsing date column {col}: {e}")
 
     return pd.DataFrame(columns=df.columns)  # no matching rows
-
 def move_to_processed(src, godown):
     dest_folder = f"{PROCESSED_ROOT}/{godown}"
     ensure_folder(dest_folder)
