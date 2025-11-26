@@ -27,6 +27,7 @@ import pandas as pd
 from dropbox import Dropbox
 from dropbox.files import WriteMode
 from twilio.rest import Client
+import pytz  # added for IST timezone
 
 # ---------------------------------------------------------
 # Load environment variables
@@ -34,19 +35,12 @@ from twilio.rest import Client
 DROPBOX_TOKEN = os.getenv("DROPBOX_TOKEN")
 TWILIO_SID = os.getenv("TWILIO_SID")
 TWILIO_AUTH = os.getenv("TWILIO_AUTH")
-
-# CORRECT secret → matches exactly the GitHub secret you created
 WHATSAPP_TO = os.getenv("WHATSAPP_TO")
-
-# Default Twilio sandbox from number available if not set
 WHATSAPP_FROM = os.getenv("WHATSAPP_FROM", "whatsapp:+14155238886")
 
-# Dropbox folder roots
-INCOMING_ROOT = os.getenv("INCOMING_ROOT", "/godowns/incoming")
-PROCESSED_ROOT = os.getenv("PROCESSED_ROOT", "/godowns/processed")
-REPORTS_ROOT = os.getenv("REPORTS_ROOT", "/godowns/reports")
-
-
+INCOMING_ROOT = "/godowns/incoming"
+PROCESSED_ROOT = "/godowns/processed"
+REPORTS_ROOT = "/godowns/reports"
 MAX_ROWS = 200
 
 required = [
@@ -65,6 +59,8 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s [INFO] %(message)s")
 
 dbx = Dropbox(DROPBOX_TOKEN)
 twilio = Client(TWILIO_SID, TWILIO_AUTH)
+
+IST = pytz.timezone("Asia/Kolkata")  # India Standard Time
 
 # ---------------------------------------------------------
 # Helper functions
@@ -117,22 +113,23 @@ def normalize(df):
     return df
 
 def filter_tomorrow(df):
-    tomorrow = (datetime.utcnow() + timedelta(days=1)).date()
+    """Return rows scheduled for tomorrow (IST timezone)"""
+    tomorrow = (datetime.now(IST) + timedelta(days=1)).date()
     date_cols = [c for c in df.columns if "date" in c.lower()]
 
     if not date_cols:
-        return df.copy()
+        return df.copy()  # no date column, include all rows
 
     for col in date_cols:
         try:
-            parsed = pd.to_datetime(df[col], errors="ignore").dt.date
+            parsed = pd.to_datetime(df[col], errors="coerce").dt.date
             mask = parsed == tomorrow
             if mask.any():
                 return df[mask].copy()
-        except:
-            pass
+        except Exception as e:
+            logging.error(f"Error parsing date column {col}: {e}")
 
-    return pd.DataFrame(columns=df.columns)
+    return pd.DataFrame(columns=df.columns)  # no matching rows
 
 def move_to_processed(src, godown):
     dest_folder = f"{PROCESSED_ROOT}/{godown}"
@@ -146,7 +143,7 @@ def move_to_processed(src, godown):
 
 def upload_report(text):
     ensure_folder(REPORTS_ROOT)
-    fname = f"report_{(datetime.utcnow()+timedelta(days=1)).date()}.txt"
+    fname = f"report_{(datetime.now(IST)+timedelta(days=1)).date()}.txt"
     path = f"{REPORTS_ROOT}/{fname}"
     try:
         dbx.files_upload(text.encode(), path, mode=WriteMode.overwrite)
@@ -171,11 +168,10 @@ def send_whatsapp(text):
 def build_report(compiled):
     lines = []
     lines.append("NEXT-DAY LOADING REPORT")
-    lines.append(f"Date: {(datetime.utcnow() + timedelta(days=1)).date()}")
+    lines.append(f"Date: {(datetime.now(IST) + timedelta(days=1)).date()}")
     lines.append("-" * 40)
 
     total = 0
-
     for godown, df in compiled.items():
         lines.append(f"\nGODOWN: {godown.upper()}")
         if df.empty:
@@ -187,17 +183,14 @@ def build_report(compiled):
             m = str(row.get("MATERIAL", "")).strip()
             q = str(row.get("QTY", row.get("QUANTITY", ""))).strip()
             v = str(row.get("VEHICLE NO", row.get("VEHICLE", ""))).strip()
-
             line = f"• {p} — {m} — {q}"
             if v:
                 line += f" — {v}"
-
             lines.append(line)
             total += 1
 
     lines.append("\n" + "-" * 40)
     lines.append(f"Total Items: {total}")
-
     return "\n".join(lines)
 
 # ---------------------------------------------------------
