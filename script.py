@@ -135,7 +135,7 @@ def filter_tomorrow(df):
     for col in date_cols:
         try:
             # Parse DD/MM/YYYY exactly (your Excel format)
-            parsed = pd.to_datetime(df[col], format="%d/%m/%Y", errors="coerce").dt.date
+            parsed = pd.to_datetime(df[col], format="%d/%m/%Y %I:%M:%S %p", errors="coerce").dt.date
             mask = parsed == tomorrow
             if mask.any():
                 return df[mask].copy()
