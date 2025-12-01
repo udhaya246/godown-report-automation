@@ -186,7 +186,7 @@ def build_report(compiled):
             p = str(row.get("PARTY", "")).strip()
             m = str(row.get("MATERIAL", "")).strip()
             q = str(row.get("QTY", row.get("QUANTITY", ""))).strip()
-            v = str(row.get("VEHICLE NO", row.get("VEHICLE", ""))).strip()
+            v = str(row.get("RATE", row.get("RATE", ""))).strip()
 
             line = f"• {p} — {m} — {q}"
             if v:
