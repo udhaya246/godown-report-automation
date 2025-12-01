@@ -23,11 +23,12 @@ import os
 import io
 import sys
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import pandas as pd
 from dropbox import Dropbox
 from dropbox.files import WriteMode
 from twilio.rest import Client
+
 
 # ---------------------------------------------------------
 # Load environment variables
@@ -36,17 +37,12 @@ DROPBOX_TOKEN = os.getenv("DROPBOX_TOKEN")
 TWILIO_SID = os.getenv("TWILIO_SID")
 TWILIO_AUTH = os.getenv("TWILIO_AUTH")
 
-# CORRECT secret → matches exactly the GitHub secret you created
 WHATSAPP_TO = os.getenv("WHATSAPP_TO")
-
-# Default Twilio sandbox from number available if not set
 WHATSAPP_FROM = os.getenv("WHATSAPP_FROM", "whatsapp:+14155238886")
 
-# Dropbox folder roots
 INCOMING_ROOT = os.getenv("INCOMING_ROOT", "/godowns/incoming")
 PROCESSED_ROOT = os.getenv("PROCESSED_ROOT", "/godowns/processed")
 REPORTS_ROOT = os.getenv("REPORTS_ROOT", "/godowns/reports")
-
 
 MAX_ROWS = 200
 
@@ -67,6 +63,7 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s [INFO] %(message)s")
 dbx = Dropbox(DROPBOX_TOKEN)
 twilio = Client(TWILIO_SID, TWILIO_AUTH)
 
+
 # ---------------------------------------------------------
 # Helper functions
 # ---------------------------------------------------------
@@ -80,6 +77,7 @@ def ensure_folder(path):
         except:
             pass
 
+
 def list_godown_folders(root):
     try:
         res = dbx.files_list_folder(root)
@@ -88,12 +86,14 @@ def list_godown_folders(root):
         logging.error(f"Failed to list folder {root}: {e}")
         return []
 
+
 def list_files(path):
     try:
         res = dbx.files_list_folder(path)
         return [f for f in res.entries if f.name.lower().endswith((".xlsx", ".xls", ".csv"))]
     except:
         return []
+
 
 def download(path):
     try:
@@ -102,6 +102,7 @@ def download(path):
     except Exception as e:
         logging.error(f"Download failed {path}: {e}")
         return None, None
+
 
 def df_from_bytes(raw, fname):
     bio = io.BytesIO(raw)
@@ -113,12 +114,19 @@ def df_from_bytes(raw, fname):
         logging.error(f"Failed reading {fname}: {e}")
         return None
 
+
 def normalize(df):
     df.columns = [str(c).strip() for c in df.columns]
     return df
 
+
+# ---------------------------------------------------------
+# FIXED DATE FILTER FUNCTION (DD/MM/YYYY + IST)
+# ---------------------------------------------------------
 def filter_tomorrow(df):
-    tomorrow = (datetime.utcnow() + timedelta(days=1)).date()
+    IST = timezone(timedelta(hours=5, minutes=30))
+    tomorrow = (datetime.now(IST) + timedelta(days=1)).date()
+
     date_cols = [c for c in df.columns if "date" in c.lower()]
 
     if not date_cols:
@@ -126,14 +134,16 @@ def filter_tomorrow(df):
 
     for col in date_cols:
         try:
-            parsed = pd.to_datetime(df[col], errors="ignore").dt.date
+            # Parse DD/MM/YYYY exactly (your Excel format)
+            parsed = pd.to_datetime(df[col], format="%d/%m/%Y", errors="coerce").dt.date
             mask = parsed == tomorrow
             if mask.any():
                 return df[mask].copy()
-        except:
-            pass
+        except Exception as e:
+            logging.error(f"Date parse error in column {col}: {e}")
 
     return pd.DataFrame(columns=df.columns)
+
 
 def move_to_processed(src, godown):
     dest_folder = f"{PROCESSED_ROOT}/{godown}"
@@ -145,15 +155,17 @@ def move_to_processed(src, godown):
     except Exception as e:
         logging.error(f"Move failed {src}: {e}")
 
+
 def upload_report(text):
     ensure_folder(REPORTS_ROOT)
-    fname = f"report_{(datetime.utcnow()+timedelta(days=1)).date()}.txt"
+    fname = f"report_{(datetime.now(timezone(timedelta(hours=5, minutes=30)))+timedelta(days=1)).date()}.txt"
     path = f"{REPORTS_ROOT}/{fname}"
     try:
         dbx.files_upload(text.encode(), path, mode=WriteMode.overwrite)
         logging.info(f"Uploaded report → {path}")
     except Exception as e:
         logging.error(f"Upload failed: {e}")
+
 
 def send_whatsapp(text):
     try:
@@ -166,13 +178,17 @@ def send_whatsapp(text):
     except Exception as e:
         logging.error(f"Twilio failed: {e}")
 
+
 # ---------------------------------------------------------
 # Report builder
 # ---------------------------------------------------------
 def build_report(compiled):
     lines = []
+    IST = timezone(timedelta(hours=5, minutes=30))
+    tomorrow = (datetime.now(IST) + timedelta(days=1)).date()
+
     lines.append("NEXT-DAY LOADING REPORT")
-    lines.append(f"Date: {(datetime.utcnow() + timedelta(days=1)).date()}")
+    lines.append(f"Date: {tomorrow}")
     lines.append("-" * 40)
 
     total = 0
@@ -200,6 +216,7 @@ def build_report(compiled):
     lines.append(f"Total Items: {total}")
 
     return "\n".join(lines)
+
 
 # ---------------------------------------------------------
 # MAIN
@@ -252,6 +269,7 @@ def main():
         send_whatsapp("No items scheduled for tomorrow.")
 
     logging.info("=== COMPLETE ===")
+
 
 if __name__ == "__main__":
     main()
