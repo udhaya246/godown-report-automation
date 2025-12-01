@@ -182,6 +182,7 @@ def send_whatsapp(text):
 # ---------------------------------------------------------
 # Report builder
 # ---------------------------------------------------------
+
 def build_report(compiled):
     lines = []
     IST = timezone(timedelta(hours=5, minutes=30))
@@ -193,23 +194,44 @@ def build_report(compiled):
 
     total = 0
 
+    # Helper for fixed-width formatting
+    def pad(text, width):
+        return (str(text) + " " * width)[:width]
+
     for godown, df in compiled.items():
         lines.append(f"\nGODOWN: {godown.upper()}")
+
         if df.empty:
             lines.append("  No items")
             continue
 
+        # Header row
+        lines.append(
+            "  "
+            + pad("PARTY", 15)
+            + pad("MATERIAL", 12)
+            + pad("QTY", 8)
+            + pad("RATE", 8)
+        )
+
+        # Divider line
+        lines.append("  " + "-" * 45)
+
+        # Rows
         for _, row in df.head(MAX_ROWS).iterrows():
             p = str(row.get("PARTY", "")).strip()
             m = str(row.get("MATERIAL", "")).strip()
             q = str(row.get("QTY", row.get("QUANTITY", ""))).strip()
-            v = str(row.get("RATE", row.get("RATE", ""))).strip()
+            v = str(row.get("RATE", "")).strip()
 
-            line = f"• {p} — {m} — {q}"
-            if v:
-                line += f" — {v}"
+            lines.append(
+                "  "
+                + pad(p, 15)
+                + pad(m, 12)
+                + pad(q, 8)
+                + pad(v, 8)
+            )
 
-            lines.append(line)
             total += 1
 
     lines.append("\n" + "-" * 40)
