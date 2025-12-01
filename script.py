@@ -5,8 +5,9 @@ Dropbox → Compile next-day rows → Twilio WhatsApp
 
 Expected Dropbox folder structure:
 
-  /godowns/incoming/godown1/*.xlsx
-  /godowns/incoming/godown2/*.xlsx
+  /godowns/incoming/REDHILLS/*.xlsx
+  /godowns/incoming/SR GLASS/*.xlsx
+  /godowns/incoming/SRIPERUMBUDUR/*.xlsx
   /godowns/processed/<godown>/
   /godowns/reports/
 
