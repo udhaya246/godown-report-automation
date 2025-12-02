@@ -26,7 +26,9 @@ jobs:
 
       - name: Run automation script
         env:
-          DROPBOX_TOKEN: ${{ secrets.DROPBOX_TOKEN }}
+          DROPBOX_APP_KEY: ${{ secrets.DROPBOX_APP_KEY }}
+          DROPBOX_APP_SECRET: ${{ secrets.DROPBOX_APP_SECRET }}
+          DROPBOX_REFRESH_TOKEN: ${{ secrets.DROPBOX_REFRESH_TOKEN }}
           INCOMING_ROOT: ${{ secrets.INCOMING_ROOT }}
           PROCESSED_ROOT: ${{ secrets.PROCESSED_ROOT }}
           REPORTS_ROOT: ${{ secrets.REPORTS_ROOT }}
