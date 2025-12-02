@@ -1,15 +1,55 @@
+#!/usr/bin/env python3
+"""
+Automated Daily Loading Report
+Dropbox → Compile next-day rows → Twilio WhatsApp
+
+Expected Dropbox folder structure:
+
+  /godowns/incoming/REDHILLS/*.xlsx
+  /godowns/incoming/SR GLASS/*.xlsx
+  /godowns/incoming/SRIPERUMBUDUR/*.xlsx
+  /godowns/processed/<godown>/
+  /godowns/reports/
+
+Environment variables (GitHub Secrets):
+DROPBOX_TOKEN
+TWILIO_SID
+TWILIO_AUTH
+WHATSAPP_FROM
+WHATSAPP_TO
+"""
+
+
+
 import os
 import io
 import sys
 import logging
 from datetime import datetime, timedelta, timezone
 import pandas as pd
-import dropbox                   
+import dropbox
 from dropbox import Dropbox
 from dropbox.files import WriteMode
 from twilio.rest import Client
 
 MAX_ROWS = 500
+
+
+# ---------------------------------------
+# ✅ NEW: USE REFRESH TOKEN TO AUTHENTICATE
+# ---------------------------------------
+def get_dropbox_client():
+    """Return Dropbox client using refresh token (never expires)."""
+    app_key = os.environ["DROPBOX_APP_KEY"]
+    app_secret = os.environ["DROPBOX_APP_SECRET"]
+    refresh_token = os.environ["DROPBOX_REFRESH_TOKEN"]
+
+    dbx = dropbox.Dropbox(
+        oauth2_refresh_token=refresh_token,
+        app_key=app_key,
+        app_secret=app_secret
+    )
+    return dbx
 
 
 def load_excel_from_dropbox(dbx, file_path):
@@ -38,7 +78,6 @@ def fetch_files(dbx, folder):
 def compile_data(dbx, folder):
     """Load all Excel files from folder and combine into dict by godown."""
     compiled = {}
-
     files = fetch_files(dbx, folder)
 
     for file in files:
@@ -65,7 +104,7 @@ def compile_data(dbx, folder):
 
 
 # -----------------------------------------------------
-# NEW FORMATTED REPORT FUNCTION   (YOUR UPDATED VERSION)
+# FORMATTED REPORT FUNCTION
 # -----------------------------------------------------
 def build_report(compiled):
     lines = []
@@ -110,8 +149,8 @@ def build_report(compiled):
 
             p = str(row.get("PARTY", "")).strip()
             m = str(row.get("MATERIAL", "")).strip()
-            q = str(row.get("QTY", row.get("QUANTITY", ""))).strip()
-            r = str(row.get("RATE", "")).strip()
+            q = str(row.get("APROX QTY", row.get("QUANTITY", ""))).strip()
+            r = str(row.get("RATE / KG", "")).strip()
 
             # Format aligned row
             line = (
@@ -167,7 +206,10 @@ def send_whatsapp(msg):
 def main():
     print("Starting script...")
 
-    dbx = Dropbox(os.getenv("DROPBOX_TOKEN"))
+    # ---------------------------------------
+    # ✅ NEW Dropbox client using REFRESH TOKEN
+    # ---------------------------------------
+    dbx = get_dropbox_client()
 
     incoming = os.getenv("INCOMING_ROOT")
     processed = os.getenv("PROCESSED_ROOT")
@@ -180,7 +222,7 @@ def main():
 
     send_whatsapp(report)
 
-    # move files after processing
+    # Move processed files
     files = fetch_files(dbx, incoming)
     for f in files:
         src = f"{incoming}/{f.name}"
