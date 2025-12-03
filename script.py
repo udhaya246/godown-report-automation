@@ -147,12 +147,13 @@ def build_report(compiled):
             m = str(row.get("MATERIAL", "")).strip()
 
             # QTY – improved detection
-            qty = ""
-            for col in ["APROX QTY", "APPROX QTY", "QUANTITY", "QTY"]:
-                if col in df.columns:
-                    qty = str(row.get(col, "")).strip()
-                    break
-
+            for key in ["APROX QTY", "APPROX QTY", "QUANTITY", "QTY"]:
+                if key in normalized_cols:
+                original = normalized_cols[key]
+                qty = str(row.get(original, "")).strip()
+                break
+            
+           
             # RATE
             r = str(row.get("RATE / KG", "")).strip()
 
