@@ -62,30 +62,42 @@ def fetch_files(dbx, folder):
         return []
 
 
-def compile_data(dbx, folder):
+def compile_all_godowns(dbx, incoming_root):
     compiled = {}
 
-    files = fetch_files(dbx, folder)
+    # list all godown subfolders
+    try:
+        subentries = dbx.files_list_folder(incoming_root).entries
+    except Exception as e:
+        print("Error listing incoming root:", e)
+        return compiled
 
-    godown_name = folder.split("/")[-1]    # folder = .../incoming/REDHILLS
+    for entry in subentries:
+        if isinstance(entry, dropbox.files.FolderMetadata):
+            godown_folder = f"{incoming_root}/{entry.name}"
+            godown_name = entry.name
 
-    compiled[godown_name] = pd.DataFrame()
+            compiled[godown_name] = pd.DataFrame()
 
-    for file in files:
-        if not file.name.lower().endswith((".xlsx", ".xls")):
-            continue
+            # fetch files inside this godown
+            files = fetch_files(dbx, godown_folder)
 
-        path = f"{folder}/{file.name}"
-        print(f"Processing: {path}")
+            for file in files:
+                if not file.name.lower().endswith((".xlsx", ".xls")):
+                    continue
 
-        try:
-            df = load_excel_from_dropbox(dbx, path)
-            compiled[godown_name] = pd.concat([compiled[godown_name], df], ignore_index=True)
-        except Exception as e:
-            print("Error reading Excel:", path, e)
+                path = f"{godown_folder}/{file.name}"
+                print(f"Processing: {path}")
+
+                try:
+                    df = load_excel_from_dropbox(dbx, path)
+                    compiled[godown_name] = pd.concat(
+                        [compiled[godown_name], df], ignore_index=True
+                    )
+                except Exception as e:
+                    print("Error reading Excel:", path, e)
 
     return compiled
-
 
 # -----------------------------------------------------
 # FORMATTED REPORT FUNCTION
@@ -201,7 +213,7 @@ def main():
     processed = os.getenv("PROCESSED_ROOT")
     reports = os.getenv("REPORTS_ROOT")
 
-    compiled = compile_data(dbx, incoming)
+    compiled = compile_all_godowns(dbx, incoming)
     report = build_report(compiled)
 
     save_report(dbx, reports, report)
