@@ -149,9 +149,9 @@ def build_report(compiled):
             # QTY – improved detection
             for key in ["APROX QTY", "APPROX QTY", "QUANTITY", "QTY"]:
                 if key in normalized_cols:
-                original = normalized_cols[key]
-                qty = str(row.get(original, "")).strip()
-                break
+                    original = normalized_cols[key]
+                    qty = str(row.get(original, "")).strip()
+                    break
             
            
             # RATE
