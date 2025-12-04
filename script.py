@@ -113,7 +113,6 @@ def build_report(compiled):
 
     total = 0
 
-    # Column formatting widths
     COL_PARTY = 18
     COL_MATERIAL = 14
     COL_QTY = 10
@@ -135,26 +134,26 @@ def build_report(compiled):
             lines.append("  No items")
             continue
 
+        # Build normalized column name map
+        normalized_cols = {c.upper().strip(): c for c in df.columns}
+
         lines.append(header)
         lines.append(separator)
 
         for _, row in df.head(MAX_ROWS).iterrows():
 
-            # PARTY
             p = str(row.get("PARTY", "")).strip()
-
-            # MATERIAL
             m = str(row.get("MATERIAL", "")).strip()
 
-            # QTY – improved detection
+            # --- FIXED QTY BLOCK ---
+            qty = ""  # safe default
+
             for key in ["APROX QTY", "APPROX QTY", "QUANTITY", "QTY"]:
                 if key in normalized_cols:
                     original = normalized_cols[key]
                     qty = str(row.get(original, "")).strip()
                     break
-            
-           
-            # RATE
+
             r = str(row.get("RATE / KG", "")).strip()
 
             line = (
@@ -171,7 +170,6 @@ def build_report(compiled):
     lines.append(f"Total Items: {total}")
 
     return "\n".join(lines)
-
 
 def save_report(dbx, folder, text):
     date = datetime.now().strftime("%Y-%m-%d")
