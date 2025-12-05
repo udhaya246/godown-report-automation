@@ -18,7 +18,6 @@ REPORTS_ROOT
 
 import os
 import io
-import sys
 from datetime import datetime, timedelta, timezone
 import pandas as pd
 import dropbox
@@ -79,7 +78,6 @@ def compile_all_godowns(dbx, incoming_root):
 
             compiled[godown_name] = pd.DataFrame()
 
-            # fetch files inside this godown
             files = fetch_files(dbx, godown_folder)
 
             for file in files:
@@ -100,7 +98,7 @@ def compile_all_godowns(dbx, incoming_root):
     return compiled
 
 # -----------------------------------------------------
-# FORMATTED REPORT FUNCTION (FINAL UPDATED)
+# FINAL UPDATED FORMATTED REPORT FUNCTION
 # -----------------------------------------------------
 def build_report(compiled):
     lines = []
@@ -127,7 +125,6 @@ def build_report(compiled):
 
     separator = "-" * (COL_PARTY + COL_MATERIAL + COL_QTY + COL_RATE)
 
-    # common acceptable column variations
     QTY_KEYS = ["APROX QTY", "APPROX QTY", "QUANTITY", "QTY"]
     RATE_KEYS = ["RATE / KG", "RATE", "RATE PER KG", "RATE/KG"]
 
@@ -138,7 +135,6 @@ def build_report(compiled):
             lines.append("  No items")
             continue
 
-        # Build normalized column map
         normalized = {c.upper().strip(): c for c in df.columns}
 
         lines.append(header)
@@ -146,20 +142,15 @@ def build_report(compiled):
 
         for _, row in df.head(MAX_ROWS).iterrows():
 
-            # --- Party ---
             party = str(row.get(normalized.get("PARTY", ""), "")).strip()
-
-            # --- Material ---
             material = str(row.get(normalized.get("MATERIAL", ""), "")).strip()
 
-            # --- Quantity (multiple possible names) ---
             qty = ""
             for k in QTY_KEYS:
                 if k in normalized:
                     qty = str(row.get(normalized[k], "")).strip()
                     break
 
-            # --- Rate (multiple possible names) ---
             rate = ""
             for k in RATE_KEYS:
                 if k in normalized:
@@ -229,11 +220,37 @@ def main():
     save_report(dbx, reports, report)
     send_whatsapp(report)
 
-    # Move processed files
-    for f in fetch_files(dbx, incoming):
-        src = f"{incoming}/{f.name}"
-        dst = f"{processed}/{f.name}"
-        move_file(dbx, src, dst)
+    # ---------------------------------------------------------
+    # SAFE FILE MOVING (ONLY FILES, NOT FOLDERS)
+    # ---------------------------------------------------------
+    try:
+        godown_folders = dbx.files_list_folder(incoming).entries
+    except Exception:
+        godown_folders = []
+
+    for entry in godown_folders:
+
+        if not isinstance(entry, dropbox.files.FolderMetadata):
+            continue  # skip files in root
+
+        godown_path = f"{incoming}/{entry.name}"
+        godown_processed = f"{processed}/{entry.name}"
+
+        # ensure processed/godown exists
+        try:
+            dbx.files_create_folder_v2(godown_processed)
+        except:
+            pass
+
+        files = fetch_files(dbx, godown_path)
+
+        for f in files:
+            if isinstance(f, dropbox.files.FolderMetadata):
+                continue  # skip subfolders
+
+            src = f"{godown_path}/{f.name}"
+            dst = f"{godown_processed}/{f.name}"
+            move_file(dbx, src, dst)
 
     print("Done.")
 
