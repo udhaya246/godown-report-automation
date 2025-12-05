@@ -100,7 +100,7 @@ def compile_all_godowns(dbx, incoming_root):
     return compiled
 
 # -----------------------------------------------------
-# FORMATTED REPORT FUNCTION
+# FORMATTED REPORT FUNCTION (FINAL UPDATED)
 # -----------------------------------------------------
 def build_report(compiled):
     lines = []
@@ -115,8 +115,8 @@ def build_report(compiled):
 
     COL_PARTY = 18
     COL_MATERIAL = 14
-    COL_QTY = 10
-    COL_RATE = 10
+    COL_QTY = 12
+    COL_RATE = 12
 
     header = (
         f"{'PARTY'.ljust(COL_PARTY)}"
@@ -127,6 +127,10 @@ def build_report(compiled):
 
     separator = "-" * (COL_PARTY + COL_MATERIAL + COL_QTY + COL_RATE)
 
+    # common acceptable column variations
+    QTY_KEYS = ["APROX QTY", "APPROX QTY", "QUANTITY", "QTY"]
+    RATE_KEYS = ["RATE / KG", "RATE", "RATE PER KG", "RATE/KG"]
+
     for godown, df in compiled.items():
         lines.append(f"\nGODOWN: {godown.upper()}")
 
@@ -134,33 +138,39 @@ def build_report(compiled):
             lines.append("  No items")
             continue
 
-        # Build normalized column name map
-        normalized_cols = {c.upper().strip(): c for c in df.columns}
+        # Build normalized column map
+        normalized = {c.upper().strip(): c for c in df.columns}
 
         lines.append(header)
         lines.append(separator)
 
         for _, row in df.head(MAX_ROWS).iterrows():
 
-            p = str(row.get("PARTY", "")).strip()
-            m = str(row.get("MATERIAL", "")).strip()
+            # --- Party ---
+            party = str(row.get(normalized.get("PARTY", ""), "")).strip()
 
-            # --- FIXED QTY BLOCK ---
-            qty = ""  # safe default
+            # --- Material ---
+            material = str(row.get(normalized.get("MATERIAL", ""), "")).strip()
 
-            for key in ["APROX QTY", "APPROX QTY", "QUANTITY", "QTY"]:
-                if key in normalized_cols:
-                    original = normalized_cols[key]
-                    qty = str(row.get(original, "")).strip()
+            # --- Quantity (multiple possible names) ---
+            qty = ""
+            for k in QTY_KEYS:
+                if k in normalized:
+                    qty = str(row.get(normalized[k], "")).strip()
                     break
 
-            r = str(row.get("RATE / KG", "")).strip()
+            # --- Rate (multiple possible names) ---
+            rate = ""
+            for k in RATE_KEYS:
+                if k in normalized:
+                    rate = str(row.get(normalized[k], "")).strip()
+                    break
 
             line = (
-                f"{p.ljust(COL_PARTY)[:COL_PARTY]}"
-                f"{m.ljust(COL_MATERIAL)[:COL_MATERIAL]}"
+                f"{party.ljust(COL_PARTY)[:COL_PARTY]}"
+                f"{material.ljust(COL_MATERIAL)[:COL_MATERIAL]}"
                 f"{qty.ljust(COL_QTY)[:COL_QTY]}"
-                f"{r.ljust(COL_RATE)[:COL_RATE]}"
+                f"{rate.ljust(COL_RATE)[:COL_RATE]}"
             )
 
             lines.append(line)
@@ -170,6 +180,7 @@ def build_report(compiled):
     lines.append(f"Total Items: {total}")
 
     return "\n".join(lines)
+
 
 def save_report(dbx, folder, text):
     date = datetime.now().strftime("%Y-%m-%d")
