@@ -102,15 +102,43 @@ def compile_all_godowns(dbx, incoming_root):
 # -----------------------------------------------------
 def build_report(compiled):
     lines = []
-    IST = timezone(timedelta(hours=5, minutes=30))
-    tomorrow = (datetime.now(IST) + timedelta(days=1)).date()
 
+    # ---------------------------------------------
+    # 1️⃣ EXTRACT DATE FROM EXCEL FILE IF PRESENT
+    # ---------------------------------------------
+    report_date = None
+
+    for godown, df in compiled.items():
+        if report_date is None and not df.empty:
+
+            # find DATE column
+            date_col = None
+            for c in df.columns:
+                if "DATE" in c.upper():
+                    date_col = c
+                    break
+
+            if date_col:
+                try:
+                    report_date = pd.to_datetime(df[date_col].iloc[0]).date()
+                except:
+                    report_date = None
+
+    # Fallback → use today's IST date
+    if report_date is None:
+        IST = timezone(timedelta(hours=5, minutes=30))
+        report_date = datetime.now(IST).date()
+
+    # ---------------------------------------------
+    # 2️⃣ HEADER
+    # ---------------------------------------------
     lines.append("NEXT-DAY LOADING REPORT")
-    lines.append(f"Date: {tomorrow}")
+    lines.append(f"Date: {report_date}")
     lines.append("-" * 40)
 
     total = 0
 
+    # column spacing
     COL_PARTY = 18
     COL_MATERIAL = 14
     COL_QTY = 12
@@ -125,9 +153,13 @@ def build_report(compiled):
 
     separator = "-" * (COL_PARTY + COL_MATERIAL + COL_QTY + COL_RATE)
 
+    # supported variations
     QTY_KEYS = ["APROX QTY", "APPROX QTY", "QUANTITY", "QTY"]
     RATE_KEYS = ["RATE / KG", "RATE", "RATE PER KG", "RATE/KG"]
 
+    # ---------------------------------------------
+    # 3️⃣ PROCESS EACH GODOWN
+    # ---------------------------------------------
     for godown, df in compiled.items():
         lines.append(f"\nGODOWN: {godown.upper()}")
 
@@ -135,28 +167,38 @@ def build_report(compiled):
             lines.append("  No items")
             continue
 
+        # normalize headers
         normalized = {c.upper().strip(): c for c in df.columns}
 
         lines.append(header)
         lines.append(separator)
 
+        # iterate rows
         for _, row in df.head(MAX_ROWS).iterrows():
 
+            # PARTY
             party = str(row.get(normalized.get("PARTY", ""), "")).strip()
+
+            # MATERIAL
             material = str(row.get(normalized.get("MATERIAL", ""), "")).strip()
 
+            # QTY
             qty = ""
             for k in QTY_KEYS:
-                if k in normalized:
-                    qty = str(row.get(normalized[k], "")).strip()
+                key = normalized.get(k)
+                if key:
+                    qty = str(row.get(key, "")).strip()
                     break
 
+            # RATE
             rate = ""
             for k in RATE_KEYS:
-                if k in normalized:
-                    rate = str(row.get(normalized[k], "")).strip()
+                key = normalized.get(k)
+                if key:
+                    rate = str(row.get(key, "")).strip()
                     break
 
+            # formatted line
             line = (
                 f"{party.ljust(COL_PARTY)[:COL_PARTY]}"
                 f"{material.ljust(COL_MATERIAL)[:COL_MATERIAL]}"
@@ -167,6 +209,9 @@ def build_report(compiled):
             lines.append(line)
             total += 1
 
+    # ---------------------------------------------
+    # FOOTER
+    # ---------------------------------------------
     lines.append("\n" + "-" * 40)
     lines.append(f"Total Items: {total}")
 
