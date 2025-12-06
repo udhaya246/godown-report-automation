@@ -1,0 +1,7 @@
+Copyright (c) 2025 Udhaya. All Rights Reserved.
+
+This project and all associated source code are proprietary and confidential.
+Unauthorized copying, modification, distribution, or use of this code, via any medium,
+is strictly prohibited without written permission from the author.
+
+For inquiries about usage rights, please contact the owner.
