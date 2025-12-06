@@ -1,3 +1,5 @@
+# Copyright (c) 2025 Udhaya. All Rights Reserved.
+# Unauthorized copying or distribution of this file is strictly prohibited.
 #!/usr/bin/env python3
 """
 Automated Daily Loading Report
