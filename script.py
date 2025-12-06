@@ -103,18 +103,17 @@ def compile_all_godowns(dbx, incoming_root):
 def build_report(compiled):
     lines = []
 
-    # ---------------------------------------------
-    # 1️⃣ EXTRACT DATE FROM EXCEL FILE IF PRESENT
-    # ---------------------------------------------
+    # --------------------------------------------
+    # EXTRACT DATE FROM FIRST NON-EMPTY DATAFRAME
+    # --------------------------------------------
     report_date = None
 
-    for godown, df in compiled.items():
+    for _, df in compiled.items():
         if report_date is None and not df.empty:
-
-            # find DATE column
+            # Look for DATE column
             date_col = None
             for c in df.columns:
-                if "DATE" in c.upper():
+                if "DATE" in c.upper():  # matches DATE, loading date, etc.
                     date_col = c
                     break
 
@@ -124,21 +123,20 @@ def build_report(compiled):
                 except:
                     report_date = None
 
-    # Fallback → use today's IST date
+    # Fallback → use today's date (IST)
     if report_date is None:
         IST = timezone(timedelta(hours=5, minutes=30))
         report_date = datetime.now(IST).date()
 
-    # ---------------------------------------------
-    # 2️⃣ HEADER
-    # ---------------------------------------------
+    # --------------------------------------------
+    # HEADER
+    # --------------------------------------------
     lines.append("NEXT-DAY LOADING REPORT")
     lines.append(f"Date: {report_date}")
     lines.append("-" * 40)
 
     total = 0
 
-    # column spacing
     COL_PARTY = 18
     COL_MATERIAL = 14
     COL_QTY = 12
@@ -153,13 +151,12 @@ def build_report(compiled):
 
     separator = "-" * (COL_PARTY + COL_MATERIAL + COL_QTY + COL_RATE)
 
-    # supported variations
     QTY_KEYS = ["APROX QTY", "APPROX QTY", "QUANTITY", "QTY"]
     RATE_KEYS = ["RATE / KG", "RATE", "RATE PER KG", "RATE/KG"]
 
-    # ---------------------------------------------
-    # 3️⃣ PROCESS EACH GODOWN
-    # ---------------------------------------------
+    # --------------------------------------------
+    # PROCESS EACH GODOWN
+    # --------------------------------------------
     for godown, df in compiled.items():
         lines.append(f"\nGODOWN: {godown.upper()}")
 
@@ -167,38 +164,29 @@ def build_report(compiled):
             lines.append("  No items")
             continue
 
-        # normalize headers
+        # normalize: {"APROX QTY": "Aprox Qty"}
         normalized = {c.upper().strip(): c for c in df.columns}
 
         lines.append(header)
         lines.append(separator)
 
-        # iterate rows
         for _, row in df.head(MAX_ROWS).iterrows():
 
-            # PARTY
             party = str(row.get(normalized.get("PARTY", ""), "")).strip()
-
-            # MATERIAL
             material = str(row.get(normalized.get("MATERIAL", ""), "")).strip()
 
-            # QTY
             qty = ""
-            for k in QTY_KEYS:
-                key = normalized.get(k)
-                if key:
-                    qty = str(row.get(key, "")).strip()
+            for key in QTY_KEYS:
+                if key in normalized:
+                    qty = str(row.get(normalized[key], "")).strip()
                     break
 
-            # RATE
             rate = ""
-            for k in RATE_KEYS:
-                key = normalized.get(k)
-                if key:
-                    rate = str(row.get(key, "")).strip()
+            for key in RATE_KEYS:
+                if key in normalized:
+                    rate = str(row.get(normalized[key], "")).strip()
                     break
 
-            # formatted line
             line = (
                 f"{party.ljust(COL_PARTY)[:COL_PARTY]}"
                 f"{material.ljust(COL_MATERIAL)[:COL_MATERIAL]}"
@@ -209,29 +197,14 @@ def build_report(compiled):
             lines.append(line)
             total += 1
 
-    # ---------------------------------------------
-    # FOOTER
-    # ---------------------------------------------
+    # --------------------------------------------
+    # SUMMARY
+    # --------------------------------------------
     lines.append("\n" + "-" * 40)
     lines.append(f"Total Items: {total}")
 
     return "\n".join(lines)
-
-
-def save_report(dbx, folder, text):
-    date = datetime.now().strftime("%Y-%m-%d")
-    filename = f"report_{date}.txt"
-    path = f"{folder}/{filename}"
-
-    dbx.files_upload(
-        text.encode("utf-8"),
-        path,
-        mode=WriteMode("overwrite"),
-    )
-
-    print(f"Saved report: {path}")
-
-
+    
 def send_whatsapp(msg):
     sid = os.getenv("TWILIO_SID")
     auth = os.getenv("TWILIO_AUTH")
