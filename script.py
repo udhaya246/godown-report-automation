@@ -223,7 +223,23 @@ def send_whatsapp(msg):
     )
 
     print("WhatsApp sent:", message.sid)
+    
+def save_report(dbx, report_folder, report_content):
+    """
+    Save the final report file to Dropbox under the given folder.
+    """
+    today = datetime.now().strftime("%Y-%m-%d")
+    filename = f"REPORT_{today}.txt"
+    dropbox_path = f"{report_folder}/{filename}"
 
+    # Upload as bytes
+    dbx.files_upload(
+        report_content.encode("utf-8"),
+        dropbox_path,
+        mode=dropbox.files.WriteMode("overwrite")
+    )
+
+    print(f"✔ Report saved to Dropbox: {dropbox_path}")
 
 def main():
     print("Starting script...")
